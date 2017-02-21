@@ -1,0 +1,76 @@
+Index: frontends/php/include/classes/items/CHelpItems.php
+===================================================================
+--- frontends/php/include/classes/items/CHelpItems.php	(revision 65686)
++++ frontends/php/include/classes/items/CHelpItems.php	(working copy)
+@@ -915,6 +915,10 @@
+ 					'description' => _('Number of monitored hosts')
+ 				],
+ 				[
++					'key' => 'zabbix[hostgroup_active_trigger_count,HOSTGROUP,SEVERITY]',
++					'description' => _('Number of active triggers with severity greater than or equals to SEVERITY in hostgroup HOSTGROUP.')
++				],
++				[
+ 					'key' => 'zabbix[items]',
+ 					'description' => _('Number of items in Zabbix database.')
+ 				],
+Index: src/libs/zbxdbhigh/db.c
+===================================================================
+--- src/libs/zbxdbhigh/db.c	(revision 65686)
++++ src/libs/zbxdbhigh/db.c	(working copy)
+@@ -629,6 +629,27 @@
+ 	return count;
+ }
+ 
++int	DBget_trigger_count_in_group_by_severity(const char *group_name, int severity)
++{
++	const char	*__function_name = "DBget_host_count_in_group";
++
++	int		count = 0;
++	DB_RESULT	result;
++	DB_ROW		row;
++
++	zabbix_log(LOG_LEVEL_DEBUG, "In %s() group_name:'%s',severity:%d", __function_name, group_name,severity);
++
++	result = DBselect("SELECT COUNT(*) FROM triggers WHERE priority >= %d AND value = 1 AND triggerid IN (SELECT DISTINCT triggerid FROM functions WHERE itemid IN (SELECT itemid FROM items WHERE hostid IN (SELECT hostid FROM hosts_groups WHERE groupid=(SELECT groupid FROM groups WHERE name='%s'))))", severity, group_name);
++
++	if (NULL != (row = DBfetch(result)))
++		count = atoi(row[0]);
++	DBfree_result(result);
++
++	zabbix_log(LOG_LEVEL_DEBUG, "End of %s():%d", __function_name, count);
++
++	return count;
++}
++
+ int	DBget_proxy_lastaccess(const char *hostname, int *lastaccess, char **error)
+ {
+ 	const char	*__function_name = "DBget_proxy_lastaccess";
+Index: src/zabbix_server/poller/checks_internal.c
+===================================================================
+--- src/zabbix_server/poller/checks_internal.c	(revision 65686)
++++ src/zabbix_server/poller/checks_internal.c	(working copy)
+@@ -208,6 +208,24 @@
+ 
+ 		SET_UI64_RESULT(result, CONFIG_SERVER_STARTUP_TIME);
+ 	}
++	else if (0 == strcmp(tmp, "hostgroup_active_trigger_count"))			/* zabbix["hostgroup_active_trigger_count","hostgroup","severity"] */
++	{
++		if (3 != nparams)
++		{
++			error = zbx_strdup(error, "Invalid number of parameters.");
++			goto out;
++		}
++
++		tmp = get_rparam(&request, 1); /* Group Name */
++		int severity = atoi(get_rparam(&request, 2)); /* Severity */
++
++		if(severity < 1 || severity > 5){
++			error = zbx_strdup(error, "Invalid severity.");
++			goto out;
++		}
++
++		SET_UI64_RESULT(result, DBget_trigger_count_in_group_by_severity(tmp,severity));
++	}
+ 	else if (0 == strcmp(tmp, "host"))			/* zabbix["host",*] */
+ 	{
+ 		if (3 != nparams)

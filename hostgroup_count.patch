@@ -1,0 +1,72 @@
+Index: frontends/php/include/classes/items/CHelpItems.php
+===================================================================
+--- frontends/php/include/classes/items/CHelpItems.php	(revision 65659)
++++ frontends/php/include/classes/items/CHelpItems.php	(working copy)
+@@ -875,6 +875,10 @@
+ 					'description' => _('Startup time of Zabbix server, Unix timestamp.')
+ 				],
+ 				[
++					'key' => 'zabbix[hostgroup_count,group_name]',
++					'description' => _('Number of hosts inside host group with group_name.')
++				],
++				[
+ 					'key' => 'zabbix[history]',
+ 					'description' => _('Number of values stored in table HISTORY.')
+ 				],
+Index: src/libs/zbxdbhigh/db.c
+===================================================================
+--- src/libs/zbxdbhigh/db.c	(revision 65659)
++++ src/libs/zbxdbhigh/db.c	(working copy)
+@@ -629,6 +629,27 @@
+ 	return count;
+ }
+ 
++int	DBget_host_count_in_group(const char *group_name)
++{
++	const char	*__function_name = "DBget_host_count_in_group";
++
++	int		count = 0;
++	DB_RESULT	result;
++	DB_ROW		row;
++
++	zabbix_log(LOG_LEVEL_DEBUG, "In %s() group_name:'%s'", __function_name, group_name);
++
++	result = DBselect("SELECT COUNT(*) FROM hosts_groups WHERE groupid IN (SELECT groupid FROM groups WHERE name = '%s')", group_name);
++
++	if (NULL != (row = DBfetch(result)))
++		count = atoi(row[0]);
++	DBfree_result(result);
++
++	zabbix_log(LOG_LEVEL_DEBUG, "End of %s():%d", __function_name, count);
++
++	return count;
++}
++
+ int	DBget_proxy_lastaccess(const char *hostname, int *lastaccess, char **error)
+ {
+ 	const char	*__function_name = "DBget_proxy_lastaccess";
+Index: src/zabbix_server/poller/checks_internal.c
+===================================================================
+--- src/zabbix_server/poller/checks_internal.c	(revision 65659)
++++ src/zabbix_server/poller/checks_internal.c	(working copy)
+@@ -205,9 +205,19 @@
+ 			error = zbx_strdup(error, "Invalid number of parameters.");
+ 			goto out;
+ 		}
+-
+ 		SET_UI64_RESULT(result, CONFIG_SERVER_STARTUP_TIME);
+ 	}
++	else if (0 == strcmp(tmp, "hostgroup_count"))			/* zabbix["hostgroup_count","Group Name"] */
++	{
++		if (2 != nparams)
++		{
++			error = zbx_strdup(error, "Invalid number of parameters.");
++			goto out;
++		}
++		tmp  = get_rparam(&request, 1);
++
++		SET_UI64_RESULT(result, DBget_host_count_in_group(tmp));
++	}
+ 	else if (0 == strcmp(tmp, "host"))			/* zabbix["host",*] */
+ 	{
+ 		if (3 != nparams)
