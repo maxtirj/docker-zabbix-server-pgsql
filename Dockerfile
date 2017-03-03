@@ -46,6 +46,7 @@ RUN locale-gen $LC_ALL && \
             libssl1.0.0 \
             libxml2 \
             fping \
+            ca-certificates \
             curl \
             libopenipmi0 1>/dev/null && \
     apt-get ${APT_FLAGS_COMMON} autoremove && \
