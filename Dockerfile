@@ -1,7 +1,7 @@
 FROM ubuntu:trusty
 MAINTAINER Alexey Pustovalov <alexey.pustovalov@zabbix.com>
 
-ARG APT_FLAGS_COMMON="-qq -y"
+ARG APT_FLAGS_COMMON=" -y"
 ARG APT_FLAGS_PERSISTANT="${APT_FLAGS_COMMON} --no-install-recommends"
 ARG APT_FLAGS_DEV="${APT_FLAGS_COMMON} --no-install-recommends"
 ARG DB_TYPE=postgresql
@@ -48,10 +48,7 @@ RUN locale-gen $LC_ALL && \
             fping \
             ca-certificates \
             curl \
-            libopenipmi0 1>/dev/null && \
-    apt-get ${APT_FLAGS_COMMON} autoremove && \
-    apt-get ${APT_FLAGS_COMMON} clean && \
-    rm -rf /var/lib/apt/lists/*
+            libopenipmi0
 
 ARG MAJOR_VERSION=3.0
 ARG ZBX_VERSION=${MAJOR_VERSION}.7
@@ -74,9 +71,10 @@ RUN apt-get ${APT_FLAGS_COMMON} update && \
             libssh2-1-dev \
             unixodbc-dev \
             libxml2-dev \
-            subversion 1>/dev/null;
+            subversion
+
 RUN cd /tmp/ && \
-    svn --quiet export ${ZBX_SOURCES} zabbix-${ZBX_VERSION};
+    svn export ${ZBX_SOURCES} zabbix-${ZBX_VERSION};
 
 RUN cd /tmp/zabbix-${ZBX_VERSION} && \
     zabbix_revision=`svn info ${ZBX_SOURCES} |grep "Last Changed Rev"|awk '{print $4;}'` && \
@@ -127,8 +125,15 @@ RUN cd /tmp/zabbix-${ZBX_VERSION} && \
             libssh2-1-dev \
             unixodbc-dev \
             libxml2-dev \
-            subversion 1>/dev/null && \
-    apt-get ${APT_FLAGS_COMMON} autoremove 1>/dev/null && \
+            subversion
+
+RUN apt-get ${APT_FLAGS_DEV} install \
+            freetds-bin \
+            freetds-common \
+            tdsodbc
+
+RUN apt-get ${APT_FLAGS_COMMON} autoremove && \
+    apt-get ${APT_FLAGS_COMMON} clean && \
     rm -rf /var/lib/apt/lists/*
 
 RUN rm -f /tmp/hostgroup_active_trigger_count.patch  /tmp/hostgroup_count.patch
